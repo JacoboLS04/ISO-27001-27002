@@ -7,11 +7,20 @@ import com.iso27001.studentmgmt.repository.UserRepository;
 import com.iso27001.studentmgmt.security.JwtUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
@@ -21,6 +30,17 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
+
+    private final Map<String, Integer> failedAttempts = new ConcurrentHashMap<>();
+    private final Map<String, Instant> lockoutUntil = new ConcurrentHashMap<>();
+        private static final List<String> DISALLOWED_GENERIC_ACCOUNTS =
+            List.of("admin", "root", "administrator");
+
+    @Value("${app.auth.max-failed-attempts:5}")
+    private int maxFailedAttempts;
+
+    @Value("${app.auth.lockout-minutes:15}")
+    private int lockoutMinutes;
 
     public AuthService(AuthenticationManager authenticationManager,
                        JwtUtil jwtUtil,
@@ -36,22 +56,82 @@ public class AuthService {
      * (ISO 27002 – logging and monitoring).
      */
     public AuthResponse login(LoginRequest request) {
+        String username = normalizeUsername(request.getUsername());
+
+        if (isDisallowedGenericAccount(username)) {
+            logger.warn("GENERIC_ACCOUNT_BLOCKED username='{}'", username);
+            throw new BadCredentialsException("Invalid username or password");
+        }
+
+        if (isLocked(username)) {
+            logger.warn("ACCOUNT_LOCKED username='{}'", username);
+            throw new LockedException("Account temporarily locked");
+        }
+
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             request.getUsername(), request.getPassword()));
 
-            String username = authentication.getName();
-            User user = userRepository.findByUsername(username)
+            String authenticatedUsername = authentication.getName();
+                User user = userRepository.findByUsername(authenticatedUsername)
                     .orElseThrow(() -> new BadCredentialsException("User not found"));
 
-            String token = jwtUtil.generateToken(username, user.getRole().name());
-            logger.info("LOGIN_SUCCESS username='{}'", username);
-            return new AuthResponse(token, username, user.getRole().name());
+            clearFailedAttempts(username);
+
+            String token = jwtUtil.generateToken(authenticatedUsername, user.getRole().name());
+            logger.info("LOGIN_SUCCESS username='{}'", authenticatedUsername);
+            return new AuthResponse(token, authenticatedUsername, user.getRole().name());
 
         } catch (BadCredentialsException e) {
-            logger.warn("LOGIN_FAILED username='{}' reason='Bad credentials'", request.getUsername());
+            int attempts = registerFailedAttempt(username);
+            logger.warn("LOGIN_FAILED username='{}' reason='Bad credentials' attempts='{}'", username, attempts);
+
+            if (attempts >= maxFailedAttempts) {
+                lockoutUntil.put(username, Instant.now().plus(lockoutMinutes, ChronoUnit.MINUTES));
+                failedAttempts.remove(username);
+                logger.warn("ACCOUNT_LOCKED username='{}' lockoutMinutes='{}'", username, lockoutMinutes);
+            }
+
             throw e;
         }
+    }
+
+    public void verifyCredentials(String username, String password) {
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(username, password)
+        );
+    }
+
+    private String normalizeUsername(String username) {
+        if (username == null) {
+            return "";
+        }
+        return username.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isLocked(String username) {
+        Instant until = lockoutUntil.get(username);
+        if (until == null) {
+            return false;
+        }
+        if (until.isAfter(Instant.now())) {
+            return true;
+        }
+        lockoutUntil.remove(username);
+        return false;
+    }
+
+    private boolean isDisallowedGenericAccount(String username) {
+        return DISALLOWED_GENERIC_ACCOUNTS.contains(username);
+    }
+
+    private int registerFailedAttempt(String username) {
+        return failedAttempts.merge(username, 1, Integer::sum);
+    }
+
+    private void clearFailedAttempts(String username) {
+        failedAttempts.remove(username);
+        lockoutUntil.remove(username);
     }
 }

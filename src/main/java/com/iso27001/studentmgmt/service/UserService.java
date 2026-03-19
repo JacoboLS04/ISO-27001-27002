@@ -17,6 +17,8 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private static final Logger logger = LoggerFactory.getLogger(UserService.class);
+        private static final List<String> DISALLOWED_GENERIC_USERNAMES =
+            List.of("admin", "root", "administrator");
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -31,6 +33,14 @@ public class UserService {
      * Logs the registration event for audit purposes (ISO 27002 – logging and monitoring).
      */
     public UserResponse register(RegisterRequest request) {
+        String normalizedUsername = request.getUsername() == null
+                ? ""
+                : request.getUsername().trim().toLowerCase();
+
+        if (DISALLOWED_GENERIC_USERNAMES.contains(normalizedUsername)) {
+            throw new IllegalArgumentException("Generic or shared usernames are not allowed");
+        }
+
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new IllegalArgumentException("Username already exists: " + request.getUsername());
         }

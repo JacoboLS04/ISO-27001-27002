@@ -19,9 +19,9 @@ public class DataInitializer {
     public CommandLineRunner seedData(UserRepository userRepository,
                                       PasswordEncoder passwordEncoder) {
         return args -> {
-            if (!userRepository.existsByUsername("admin")) {
-                userRepository.save(new User("admin", passwordEncoder.encode("Admin123"), Role.ROLE_ADMIN));
-                logger.info("Seeded default admin user (username=admin)");
+            if (!userRepository.existsByUsername("admin.iso")) {
+                userRepository.save(new User("admin.iso", passwordEncoder.encode("Admin123"), Role.ROLE_ADMIN));
+                logger.info("Seeded default admin user (username=admin.iso)");
             }
             if (!userRepository.existsByUsername("user1")) {
                 userRepository.save(new User("user1", passwordEncoder.encode("User1234"), Role.ROLE_USER));

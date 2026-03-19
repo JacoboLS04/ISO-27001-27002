@@ -23,6 +23,8 @@ public class RegisterRequest {
     )
     private String password;
 
+    private String captchaToken;
+
     private String role;
 
     public String getUsername() { return username; }
@@ -32,6 +34,10 @@ public class RegisterRequest {
     public String getPassword() { return password; }
 
     public void setPassword(String password) { this.password = password; }
+
+    public String getCaptchaToken() { return captchaToken; }
+
+    public void setCaptchaToken(String captchaToken) { this.captchaToken = captchaToken; }
 
     public String getRole() { return role; }
 

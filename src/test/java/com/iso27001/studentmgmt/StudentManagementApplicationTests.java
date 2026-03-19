@@ -141,6 +141,28 @@ class StudentManagementApplicationTests {
                 .andExpect(status().is2xxSuccessful());
     }
 
+    // ── CORS tests ────────────────────────────────────────────────────────────
+
+    @Test
+    void corsPreflight_authLogin_fromLocalhost3002_returnsAllowOriginHeader() throws Exception {
+        mockMvc.perform(options("/auth/login")
+                        .header("Origin", "http://localhost:3002")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type,authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3002"));
+    }
+
+    @Test
+    void corsPreflight_usersDelete_fromLocalhost3002_returnsAllowOriginHeader() throws Exception {
+        mockMvc.perform(options("/users/2")
+                        .header("Origin", "http://localhost:3002")
+                        .header("Access-Control-Request-Method", "DELETE")
+                        .header("Access-Control-Request-Headers", "authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3002"));
+    }
+
     // ── Helper ────────────────────────────────────────────────────────────────
 
     private String obtainToken(String username, String password) throws Exception {
