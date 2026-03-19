@@ -22,10 +22,14 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SecurityAuditService securityAuditService;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository,
+                       PasswordEncoder passwordEncoder,
+                       SecurityAuditService securityAuditService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.securityAuditService = securityAuditService;
     }
 
     /**
@@ -38,6 +42,7 @@ public class UserService {
                 : request.getUsername().trim().toLowerCase();
 
         if (DISALLOWED_GENERIC_USERNAMES.contains(normalizedUsername)) {
+            securityAuditService.publish("USER_REGISTERED", normalizedUsername, "FAILED", "Generic/shared username rejected");
             throw new IllegalArgumentException("Generic or shared usernames are not allowed");
         }
 
@@ -54,6 +59,7 @@ public class UserService {
         User saved = userRepository.save(user);
 
         logger.info("USER_REGISTERED username='{}' role='{}'", saved.getUsername(), saved.getRole());
+        securityAuditService.publish("USER_REGISTERED", saved.getUsername(), "SUCCESS", "User account created with role=" + saved.getRole());
         return toResponse(saved);
     }
 
@@ -76,6 +82,7 @@ public class UserService {
         }
         userRepository.deleteById(id);
         logger.info("USER_DELETED id='{}'", id);
+        securityAuditService.publish("USER_DELETED", "admin", "SUCCESS", "User deleted id=" + id);
     }
 
     private Role parseRole(String roleStr) {

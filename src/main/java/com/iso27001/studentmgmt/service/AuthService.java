@@ -30,6 +30,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
+    private final SecurityAuditService securityAuditService;
 
     private final Map<String, Integer> failedAttempts = new ConcurrentHashMap<>();
     private final Map<String, Instant> lockoutUntil = new ConcurrentHashMap<>();
@@ -44,10 +45,12 @@ public class AuthService {
 
     public AuthService(AuthenticationManager authenticationManager,
                        JwtUtil jwtUtil,
-                       UserRepository userRepository) {
+                       UserRepository userRepository,
+                       SecurityAuditService securityAuditService) {
         this.authenticationManager = authenticationManager;
         this.jwtUtil = jwtUtil;
         this.userRepository = userRepository;
+        this.securityAuditService = securityAuditService;
     }
 
     /**
@@ -60,11 +63,13 @@ public class AuthService {
 
         if (isDisallowedGenericAccount(username)) {
             logger.warn("GENERIC_ACCOUNT_BLOCKED username='{}'", username);
+            securityAuditService.publish("GENERIC_ACCOUNT_BLOCKED", username, "FAILED", "Generic/shared account is blocked");
             throw new BadCredentialsException("Invalid username or password");
         }
 
         if (isLocked(username)) {
             logger.warn("ACCOUNT_LOCKED username='{}'", username);
+            securityAuditService.publish("LOGIN", username, "FAILED", "Account temporarily locked");
             throw new LockedException("Account temporarily locked");
         }
 
@@ -81,16 +86,19 @@ public class AuthService {
 
             String token = jwtUtil.generateToken(authenticatedUsername, user.getRole().name());
             logger.info("LOGIN_SUCCESS username='{}'", authenticatedUsername);
+            securityAuditService.publish("LOGIN", authenticatedUsername, "SUCCESS", "Authentication successful");
             return new AuthResponse(token, authenticatedUsername, user.getRole().name());
 
         } catch (BadCredentialsException e) {
             int attempts = registerFailedAttempt(username);
             logger.warn("LOGIN_FAILED username='{}' reason='Bad credentials' attempts='{}'", username, attempts);
+            securityAuditService.publish("LOGIN", username, "FAILED", "Invalid credentials, attempts=" + attempts);
 
             if (attempts >= maxFailedAttempts) {
                 lockoutUntil.put(username, Instant.now().plus(lockoutMinutes, ChronoUnit.MINUTES));
                 failedAttempts.remove(username);
                 logger.warn("ACCOUNT_LOCKED username='{}' lockoutMinutes='{}'", username, lockoutMinutes);
+                securityAuditService.publish("ACCOUNT_LOCKED", username, "FAILED", "Temporary lockout applied for " + lockoutMinutes + " minutes");
             }
 
             throw e;

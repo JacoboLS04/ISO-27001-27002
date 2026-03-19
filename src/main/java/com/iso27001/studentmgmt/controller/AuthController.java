@@ -8,6 +8,7 @@ import com.iso27001.studentmgmt.dto.StepUpResponse;
 import com.iso27001.studentmgmt.dto.UserResponse;
 import com.iso27001.studentmgmt.service.AuthService;
 import com.iso27001.studentmgmt.service.RecaptchaVerificationService;
+import com.iso27001.studentmgmt.service.SecurityAuditService;
 import com.iso27001.studentmgmt.service.StepUpAuthService;
 import com.iso27001.studentmgmt.service.UserService;
 import jakarta.validation.Valid;
@@ -34,15 +35,18 @@ public class AuthController {
     private final UserService userService;
     private final RecaptchaVerificationService recaptchaVerificationService;
     private final StepUpAuthService stepUpAuthService;
+    private final SecurityAuditService securityAuditService;
 
     public AuthController(AuthService authService,
                           UserService userService,
                           RecaptchaVerificationService recaptchaVerificationService,
-                          StepUpAuthService stepUpAuthService) {
+                          StepUpAuthService stepUpAuthService,
+                          SecurityAuditService securityAuditService) {
         this.authService = authService;
         this.userService = userService;
         this.recaptchaVerificationService = recaptchaVerificationService;
         this.stepUpAuthService = stepUpAuthService;
+        this.securityAuditService = securityAuditService;
     }
 
     /**
@@ -59,6 +63,7 @@ public class AuthController {
 
             if (!captchaOk) {
                 logger.warn("RECAPTCHA_FAILED username='{}' endpoint='/auth/register'", request.getUsername());
+                securityAuditService.publish("RECAPTCHA", request.getUsername(), "FAILED", "Register request blocked by reCAPTCHA");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(Map.of("error", "reCAPTCHA validation failed"));
             }
@@ -85,6 +90,7 @@ public class AuthController {
 
             if (!captchaOk) {
                 logger.warn("RECAPTCHA_FAILED username='{}' endpoint='/auth/login'", request.getUsername());
+                securityAuditService.publish("RECAPTCHA", request.getUsername(), "FAILED", "Login request blocked by reCAPTCHA");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(Map.of("error", "reCAPTCHA validation failed"));
             }
@@ -111,9 +117,11 @@ public class AuthController {
         try {
             authService.verifyCredentials(principal.getName(), request.getPassword());
             StepUpAuthService.StepUpToken token = stepUpAuthService.issueToken(principal.getName());
+            securityAuditService.publish("STEP_UP", principal.getName(), "SUCCESS", "Step-up challenge successful");
 
             return ResponseEntity.ok(new StepUpResponse(token.getToken(), token.getExpiresAtIso()));
         } catch (BadCredentialsException e) {
+            securityAuditService.publish("STEP_UP", principal.getName(), "FAILED", "Step-up credentials invalid");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Step-up authentication failed"));
         }
