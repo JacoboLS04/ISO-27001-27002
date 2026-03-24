@@ -7,6 +7,7 @@ import com.iso27001.studentmgmt.dto.StepUpRequest;
 import com.iso27001.studentmgmt.dto.StepUpResponse;
 import com.iso27001.studentmgmt.dto.UserResponse;
 import com.iso27001.studentmgmt.service.AuthService;
+import com.iso27001.studentmgmt.service.MonitoringMetricsService;
 import com.iso27001.studentmgmt.service.RecaptchaVerificationService;
 import com.iso27001.studentmgmt.service.SecurityAuditService;
 import com.iso27001.studentmgmt.service.StepUpAuthService;
@@ -33,17 +34,20 @@ public class AuthController {
 
     private final AuthService authService;
     private final UserService userService;
+    private final MonitoringMetricsService monitoringMetricsService;
     private final RecaptchaVerificationService recaptchaVerificationService;
     private final StepUpAuthService stepUpAuthService;
     private final SecurityAuditService securityAuditService;
 
     public AuthController(AuthService authService,
                           UserService userService,
+                          MonitoringMetricsService monitoringMetricsService,
                           RecaptchaVerificationService recaptchaVerificationService,
                           StepUpAuthService stepUpAuthService,
                           SecurityAuditService securityAuditService) {
         this.authService = authService;
         this.userService = userService;
+        this.monitoringMetricsService = monitoringMetricsService;
         this.recaptchaVerificationService = recaptchaVerificationService;
         this.stepUpAuthService = stepUpAuthService;
         this.securityAuditService = securityAuditService;
@@ -96,11 +100,14 @@ public class AuthController {
             }
 
             AuthResponse response = authService.login(request);
+            monitoringMetricsService.incrementLoginSuccess();
             return ResponseEntity.ok(response);
         } catch (BadCredentialsException e) {
+            monitoringMetricsService.incrementLoginFailed();
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Invalid username or password"));
         } catch (LockedException e) {
+            monitoringMetricsService.incrementLoginLocked();
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Invalid username or password"));
         }
