@@ -1,0 +1,31 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: [alertname, control, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 2h
+  routes:
+    - matchers:
+        - severity="high"
+      receiver: high-priority
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: "http://127.0.0.1:5001/alerts"
+        send_resolved: true
+
+  - name: high-priority
+    webhook_configs:
+      - url: "http://127.0.0.1:5001/alerts/high"
+        send_resolved: true
+
+inhibit_rules:
+  - source_matchers:
+      - severity="high"
+    target_matchers:
+      - severity="medium"
+    equal: [alertname]

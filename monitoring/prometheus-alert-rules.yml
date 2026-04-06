@@ -1,0 +1,93 @@
+groups:
+  - name: iso27002-security-activity-monitoring
+    interval: 30s
+    rules:
+      - alert: BruteForceSuspected
+        expr: increase(security_http_401_total[5m]) > 25
+        for: 2m
+        labels:
+          severity: high
+          control: "8.16"
+        annotations:
+          summary: "Possible brute-force activity"
+          description: "More than 25 HTTP 401 responses in 5 minutes."
+
+      - alert: LoginFailuresSpike
+        expr: increase(security_auth_login_failed_total[10m]) > 15
+        for: 5m
+        labels:
+          severity: high
+          control: "8.16"
+        annotations:
+          summary: "Failed logins spike detected"
+          description: "Failed login attempts exceeded threshold in the last 10 minutes."
+
+      - alert: HighJvmMemoryPressure
+        expr: (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) > 0.85
+        for: 5m
+        labels:
+          severity: medium
+          control: "8.16"
+        annotations:
+          summary: "High JVM heap usage"
+          description: "Heap usage is above 85% for more than 5 minutes."
+
+      - alert: HighCpuUsage
+        expr: system_cpu_usage > 0.80
+        for: 5m
+        labels:
+          severity: medium
+          control: "8.16"
+        annotations:
+          summary: "High CPU usage"
+          description: "System CPU usage is above 80% for more than 5 minutes."
+
+      - alert: FrontendErrorsSpike
+        expr: increase(security_frontend_js_errors_total[10m]) + increase(security_frontend_unhandled_rejections_total[10m]) > 20
+        for: 3m
+        labels:
+          severity: medium
+          control: "8.16"
+        annotations:
+          summary: "Frontend anomaly spike"
+          description: "Frontend runtime errors or unhandled rejections exceeded threshold."
+
+      - alert: SuspiciousScriptInjection
+        expr: increase(security_frontend_script_injection_suspected_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: high
+          control: "8.16"
+        annotations:
+          summary: "Suspicious script injection reported"
+          description: "Frontend sensor reported suspicious script insertion in DOM."
+
+      - alert: ApiFailureSpike
+        expr: increase(security_frontend_api_failure_spikes_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: medium
+          control: "8.16"
+        annotations:
+          summary: "Frontend API failures spiked"
+          description: "Frontend reported an API failure burst in the last 5 minutes."
+
+      - alert: PossibleDdosPattern
+        expr: sum(rate(http_server_requests_seconds_count[1m])) > 40 and system_cpu_usage > 0.80
+        for: 2m
+        labels:
+          severity: high
+          control: "8.16"
+        annotations:
+          summary: "Possible DDoS pattern detected"
+          description: "High request rate and CPU saturation sustained for at least 2 minutes."
+
+      - alert: BackendAnomalyDetectorTriggered
+        expr: increase(security_anomaly_alerts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: high
+          control: "8.16"
+        annotations:
+          summary: "Backend anomaly detector triggered"
+          description: "In-app anomaly detection emitted at least one high-risk alert event."
